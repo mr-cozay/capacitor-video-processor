@@ -10,8 +10,8 @@
     "android/src/main/",
     "android/build.gradle",
     "dist/",
-    "ios/Sources",
-    "ios/Tests",
+    "ios/Sources/",
+    "*.podspec",
     "Package.swift",
     "CapacitorVideoProcessor.podspec"
   ],
@@ -24,14 +24,9 @@
   "bugs": {
     "url": "https://github.com/mr-cozay/capacitor-video-processor/issues"
   },
-  "keywords": [
-    "capacitor",
-    "plugin",
-    "native"
-  ],
   "scripts": {
-    "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
-    "verify:ios": "xcodebuild -scheme CapacitorVideoProcessor -destination generic/platform=iOS",
+    "verify": "npm run verify:web && npm run verify:android && npm run verify:ios",
+    "verify:ios": "swift package resolve",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "npm run build",
     "lint": "npm run eslint && npm run prettier -- --check && npm run swiftlint -- lint",
@@ -39,7 +34,7 @@
     "eslint": "eslint . --ext ts",
     "prettier": "prettier \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "swiftlint": "node-swiftlint",
-    "docgen": "docgen --api CapacitorVideoProcessorPluginPlugin --output-readme README.md --output-json dist/docs.json",
+    "docgen": "docgen --api VideoProcessorPlugin --output-readme README.md --output-json dist/docs.json",
     "build": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.mjs",
     "clean": "rimraf ./dist",
     "watch": "tsc --watch",
@@ -76,5 +71,14 @@
     "android": {
       "src": "android"
     }
-  }
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "video",
+    "compress",
+    "h264",
+    "android",
+    "ios"
+  ]
 }

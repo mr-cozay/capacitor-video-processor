@@ -1,13 +1,15 @@
 import { registerPlugin } from '@capacitor/core';
 
-import type { CapacitorVideoProcessorPluginPlugin } from './definitions';
+import type { VideoProcessorPlugin } from './definitions';
 
-const CapacitorVideoProcessorPlugin = registerPlugin<CapacitorVideoProcessorPluginPlugin>(
-  'CapacitorVideoProcessorPlugin',
-  {
-    web: () => import('./web').then((m) => new m.CapacitorVideoProcessorPluginWeb()),
-  },
-);
+/**
+ * Point d'entrée principal du plugin.
+ * Capacitor choisit automatiquement l'implémentation native (Android/iOS)
+ * ou le fallback Web selon la plateforme.
+ */
+const VideoProcessor = registerPlugin<VideoProcessorPlugin>('VideoProcessor', {
+  web: () => import('./web').then((m) => new m.VideoProcessorWeb()),
+});
 
 export * from './definitions';
-export { CapacitorVideoProcessorPlugin };
+export { VideoProcessor };

@@ -26,25 +26,48 @@ npx cap sync
 
 <docgen-index>
 
-* [`echo(...)`](#echo)
+* [`compressVideo(...)`](#compressvideo)
+* [Interfaces](#interfaces)
 
 </docgen-index>
 
 <docgen-api>
 <!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
 
-### echo(...)
+### compressVideo(...)
 
 ```typescript
-echo(options: { value: string; }) => Promise<{ value: string; }>
+compressVideo(options: CompressVideoOptions) => Promise<CompressVideoResult>
 ```
 
-| Param         | Type                            |
-| ------------- | ------------------------------- |
-| **`options`** | <code>{ value: string; }</code> |
+Compresse une vidéo en H.264 720p / 1.5 Mbps / AAC 128 kbps.
 
-**Returns:** <code>Promise&lt;{ value: string; }&gt;</code>
+| Param         | Type                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| **`options`** | <code><a href="#compressvideooptions">CompressVideoOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#compressvideoresult">CompressVideoResult</a>&gt;</code>
+
+**Since:** 1.0.0
 
 --------------------
+
+
+### Interfaces
+
+
+#### CompressVideoResult
+
+| Prop         | Type                | Description                                  |
+| ------------ | ------------------- | -------------------------------------------- |
+| **`output`** | <code>string</code> | Chemin absolu du fichier de sortie compressé |
+
+
+#### CompressVideoOptions
+
+| Prop         | Type                | Description                                                  |
+| ------------ | ------------------- | ------------------------------------------------------------ |
+| **`input`**  | <code>string</code> | Chemin absolu vers la vidéo source (ex: file:///storage/...) |
+| **`output`** | <code>string</code> | Chemin absolu de destination pour la vidéo compressée        |
 
 </docgen-api>

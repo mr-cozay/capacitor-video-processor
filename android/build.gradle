@@ -65,3 +65,14 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 }
+
+// Capacitor Android compile en Java 21 : force le compilateur toolchain (téléchargeable via Foojay).
+allprojects {
+    afterEvaluate {
+        tasks.withType(JavaCompile).configureEach { task ->
+            task.javaCompiler = javaToolchains.compilerFor {
+                languageVersion = org.gradle.jvm.toolchain.JavaLanguageVersion.of(21)
+            }
+        }
+    }
+}

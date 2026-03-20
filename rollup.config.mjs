@@ -4,7 +4,7 @@ export default {
     {
       file: 'dist/plugin.js',
       format: 'iife',
-      name: 'capacitorCapacitorVideoProcessorPlugin',
+      name: 'capacitorVideoProcessor',
       globals: {
         '@capacitor/core': 'capacitorExports',
       },
