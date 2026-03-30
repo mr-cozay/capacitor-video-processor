@@ -2,8 +2,14 @@ import AVFoundation
 import Capacitor
 import Foundation
 
+/// Enregistrement Swift-only (SwiftPM / Capacitor 8) — pas de fichier `.m` requis.
 @objc(VideoProcessorPlugin)
-public class VideoProcessorPlugin: CAPPlugin {
+public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "VideoProcessorPlugin"
+    public let jsName = "VideoProcessor"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "compressVideo", returnType: CAPPluginReturnPromise),
+    ]
 
     private func fileURL(from pathOrUrl: String) -> URL {
         let trimmed = pathOrUrl.trimmingCharacters(in: .whitespacesAndNewlines)
