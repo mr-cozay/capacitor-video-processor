@@ -107,10 +107,69 @@ class VideoProcessorPlugin : Plugin() {
         var audioTrackMuxer = -1
         var muxerStarted = false
 
-        val bufferInfo = MediaCodec.BufferInfo()
+        val decBufferInfo = MediaCodec.BufferInfo()
+        val encBufferInfo = MediaCodec.BufferInfo()
         var decoderDone = false
         var encoderDone = false
         var encoderEosSent = false
+
+        fun drainDecoderOutputs() {
+            while (true) {
+                val outDecoder = decoder.dequeueOutputBuffer(decBufferInfo, 0)
+                when (outDecoder) {
+                    MediaCodec.INFO_TRY_AGAIN_LATER -> break
+                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> continue
+                    else -> {
+                        if (outDecoder < 0) {
+                            break
+                        }
+                        val decoderEos =
+                            (decBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
+                        val renderToSurface = decBufferInfo.size > 0 || decoderEos
+                        decoder.releaseOutputBuffer(outDecoder, renderToSurface)
+                        if (decoderEos && !encoderEosSent) {
+                            encoder.signalEndOfInputStream()
+                            encoderEosSent = true
+                        }
+                    }
+                }
+            }
+        }
+
+        fun drainEncoderOutputs() {
+            while (!encoderDone) {
+                val outEncoder = encoder.dequeueOutputBuffer(encBufferInfo, 0)
+                when (outEncoder) {
+                    MediaCodec.INFO_TRY_AGAIN_LATER -> break
+                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        if (!muxerStarted) {
+                            videoTrackMuxer = muxer.addTrack(encoder.outputFormat)
+                            if (audioTrackIndex != -1) {
+                                audioTrackMuxer =
+                                    muxer.addTrack(extractor.getTrackFormat(audioTrackIndex))
+                            }
+                            muxer.start()
+                            muxerStarted = true
+                        }
+                    }
+                    else -> {
+                        if (outEncoder < 0) {
+                            break
+                        }
+                        if (muxerStarted) {
+                            val encodedBuffer = encoder.getOutputBuffer(outEncoder)!!
+                            if (encBufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
+                                muxer.writeSampleData(videoTrackMuxer, encodedBuffer, encBufferInfo)
+                            }
+                        }
+                        encoder.releaseOutputBuffer(outEncoder, false)
+                        if (encBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                            encoderDone = true
+                        }
+                    }
+                }
+            }
+        }
 
         try {
             while (!encoderDone) {
@@ -142,57 +201,85 @@ class VideoProcessorPlugin : Plugin() {
                     }
                 }
 
-                val outDecoder = decoder.dequeueOutputBuffer(bufferInfo, 10_000)
-                when {
-                    outDecoder == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                    outDecoder == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
-                    outDecoder >= 0 -> {
-                        val decoderEos =
-                            (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
-                        val render = bufferInfo.size > 0
-                        decoder.releaseOutputBuffer(outDecoder, render)
-                        if (decoderEos && !encoderEosSent) {
-                            encoder.signalEndOfInputStream()
-                            encoderEosSent = true
+                drainDecoderOutputs()
+                drainEncoderOutputs()
+
+                if (encoderDone) {
+                    break
+                }
+
+                if (!decoderDone) {
+                    val outDecoder = decoder.dequeueOutputBuffer(decBufferInfo, 10_000)
+                    when (outDecoder) {
+                        MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                        MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {}
+                        else -> {
+                            if (outDecoder >= 0) {
+                                val decoderEos =
+                                    (decBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) !=
+                                        0
+                                val renderToSurface =
+                                    decBufferInfo.size > 0 || decoderEos
+                                decoder.releaseOutputBuffer(outDecoder, renderToSurface)
+                                if (decoderEos && !encoderEosSent) {
+                                    encoder.signalEndOfInputStream()
+                                    encoderEosSent = true
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    val outEncoder = encoder.dequeueOutputBuffer(encBufferInfo, 10_000)
+                    when (outEncoder) {
+                        MediaCodec.INFO_TRY_AGAIN_LATER -> {}
+                        MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            if (!muxerStarted) {
+                                videoTrackMuxer = muxer.addTrack(encoder.outputFormat)
+                                if (audioTrackIndex != -1) {
+                                    audioTrackMuxer =
+                                        muxer.addTrack(extractor.getTrackFormat(audioTrackIndex))
+                                }
+                                muxer.start()
+                                muxerStarted = true
+                            }
+                        }
+                        else -> {
+                            if (outEncoder >= 0) {
+                                if (muxerStarted) {
+                                    val encodedBuffer = encoder.getOutputBuffer(outEncoder)!!
+                                    if (encBufferInfo.flags and
+                                        MediaCodec.BUFFER_FLAG_CODEC_CONFIG ==
+                                        0
+                                    ) {
+                                        muxer.writeSampleData(
+                                            videoTrackMuxer,
+                                            encodedBuffer,
+                                            encBufferInfo,
+                                        )
+                                    }
+                                }
+                                encoder.releaseOutputBuffer(outEncoder, false)
+                                if (encBufferInfo.flags and
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM !=
+                                    0
+                                ) {
+                                    encoderDone = true
+                                }
+                            }
                         }
                     }
                 }
 
-                val outEncoder = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
-                when {
-                    outEncoder == MediaCodec.INFO_TRY_AGAIN_LATER -> {}
-                    outEncoder == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        if (!muxerStarted) {
-                            videoTrackMuxer = muxer.addTrack(encoder.outputFormat)
-                            if (audioTrackIndex != -1) {
-                                audioTrackMuxer =
-                                    muxer.addTrack(extractor.getTrackFormat(audioTrackIndex))
-                            }
-                            muxer.start()
-                            muxerStarted = true
-                        }
-                    }
-                    outEncoder >= 0 -> {
-                        if (muxerStarted) {
-                            val encodedBuffer = encoder.getOutputBuffer(outEncoder)!!
-                            if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
-                                muxer.writeSampleData(videoTrackMuxer, encodedBuffer, bufferInfo)
-                            }
-                        }
-                        encoder.releaseOutputBuffer(outEncoder, false)
-
-                        if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                            encoderDone = true
-                        }
-                    }
-                }
+                drainDecoderOutputs()
+                drainEncoderOutputs()
             }
 
             if (audioTrackIndex != -1 && muxerStarted) {
                 extractor.unselectTrack(videoTrackIndex)
                 extractor.selectTrack(audioTrackIndex)
+                extractor.seekTo(0L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-                val audioBuffer = ByteBuffer.allocate(64 * 1024)
+                val audioBuffer = ByteBuffer.allocate(512 * 1024)
                 val audioInfo = MediaCodec.BufferInfo()
 
                 while (true) {
@@ -213,19 +300,33 @@ class VideoProcessorPlugin : Plugin() {
                 decoder.stop()
             } catch (_: Exception) {
             }
-            decoder.release()
+            try {
+                decoder.release()
+            } catch (_: Exception) {
+            }
             try {
                 encoder.stop()
             } catch (_: Exception) {
             }
-            encoder.release()
-            inputSurface.release()
-            extractor.release()
             try {
-                muxer.stop()
+                inputSurface.release()
             } catch (_: Exception) {
             }
-            muxer.release()
+            try {
+                encoder.release()
+            } catch (_: Exception) {
+            }
+            extractor.release()
+            if (muxerStarted) {
+                try {
+                    muxer.stop()
+                } catch (_: Exception) {
+                }
+            }
+            try {
+                muxer.release()
+            } catch (_: Exception) {
+            }
         }
     }
 }
