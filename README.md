@@ -40,7 +40,7 @@ npx cap sync
 compressVideo(options: CompressVideoOptions) => Promise<CompressVideoResult>
 ```
 
-Compresse une vidéo en H.264 720p / 1.5 Mbps / AAC 128 kbps.
+Compresse une vidéo en H.264 entre **480p et 720p** (ratio conservé), débit vidéo adaptatif (~1,4–2,5 Mbps), **AAC 128 kbps**.
 
 | Param         | Type                                                                  |
 | ------------- | --------------------------------------------------------------------- |

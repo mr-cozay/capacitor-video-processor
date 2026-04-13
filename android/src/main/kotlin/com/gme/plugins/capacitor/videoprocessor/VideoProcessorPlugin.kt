@@ -16,6 +16,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
+import kotlin.math.min
 
 @CapacitorPlugin(name = "VideoProcessor")
 class VideoProcessorPlugin : Plugin() {
@@ -57,6 +58,75 @@ class VideoProcessorPlugin : Plugin() {
         return trimmed
     }
 
+    /**
+     * Sortie entre 480p et 720p (côté le plus court), en préservant le ratio.
+     * Si le ratio ne permet pas d’atteindre 480p sans dépasser 1280px sur le grand côté, on reste au plus proche possible.
+     */
+    private fun computeTargetEncodeDimensions(decoderFormat: MediaFormat): Pair<Int, Int> {
+        val rotation =
+            if (decoderFormat.containsKey(MediaFormat.KEY_ROTATION)) {
+                decoderFormat.getInteger(MediaFormat.KEY_ROTATION)
+            } else {
+                0
+            }
+        val w0 = decoderFormat.getInteger(MediaFormat.KEY_WIDTH).toFloat()
+        val h0 = decoderFormat.getInteger(MediaFormat.KEY_HEIGHT).toFloat()
+        if (w0 <= 0f || h0 <= 0f) {
+            return Pair(1280, 720)
+        }
+        val (srcW, srcH) =
+            if (rotation == 90 || rotation == 270) {
+                Pair(h0, w0)
+            } else {
+                Pair(w0, h0)
+            }
+        val maxLong = 1280f
+        val maxShort = 720f
+        val minShort = 480f
+        val srcLong = kotlin.math.max(srcW, srcH)
+        val srcShort = kotlin.math.min(srcW, srcH)
+
+        var scale = min(maxLong / srcLong, maxShort / srcShort)
+        var outLong = srcLong * scale
+        var outShort = srcShort * scale
+
+        if (outShort < minShort) {
+            val scaleUp = minShort / srcShort
+            if (srcLong * scaleUp <= maxLong) {
+                scale = scaleUp
+                outLong = srcLong * scale
+                outShort = srcShort * scale
+            }
+        }
+        if (outLong > maxLong) {
+            val c = maxLong / outLong
+            outLong *= c
+            outShort *= c
+        }
+        if (outShort > maxShort) {
+            val c = maxShort / outShort
+            outLong *= c
+            outShort *= c
+        }
+
+        val landscape = srcW >= srcH
+        val outW = if (landscape) outLong else outShort
+        val outH = if (landscape) outShort else outLong
+        val evenW = (outW.toInt() / 2) * 2
+        val evenH = (outH.toInt() / 2) * 2
+        return Pair(evenW.coerceAtLeast(2), evenH.coerceAtLeast(2))
+    }
+
+    private fun computeTargetBitrate(width: Int, height: Int): Int {
+        val shorter = kotlin.math.min(width, height).toFloat()
+        if (shorter <= 0f) {
+            return 1_500_000
+        }
+        // ~1,4 Mbps à 480p, ~2,5 Mbps à 720p (aligné ordre de grandeur profil serveur Kwital).
+        val t = ((shorter - 480f) / (720f - 480f)).coerceIn(0f, 1f)
+        return (1_400_000 + t * 1_100_000).toInt()
+    }
+
     private fun processVideo(inputPath: String, outputPath: String) {
         val extractor = MediaExtractor()
         extractor.setDataSource(inputPath)
@@ -78,9 +148,16 @@ class VideoProcessorPlugin : Plugin() {
             throw IllegalStateException("Aucune piste vidéo trouvée dans le fichier source")
         }
 
+        extractor.selectTrack(videoTrackIndex)
+        val decoderFormat = extractor.getTrackFormat(videoTrackIndex)
+        val mime = decoderFormat.getString(MediaFormat.KEY_MIME)!!
+
+        val (encW, encH) = computeTargetEncodeDimensions(decoderFormat)
+        val bitRate = computeTargetBitrate(encW, encH)
+
         val encoderFormat =
-            MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720).apply {
-                setInteger(MediaFormat.KEY_BIT_RATE, 1_500_000)
+            MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, encW, encH).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, 30)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
                 setInteger(
@@ -93,10 +170,6 @@ class VideoProcessorPlugin : Plugin() {
         encoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         val inputSurface: Surface = encoder.createInputSurface()
         encoder.start()
-
-        extractor.selectTrack(videoTrackIndex)
-        val decoderFormat = extractor.getTrackFormat(videoTrackIndex)
-        val mime = decoderFormat.getString(MediaFormat.KEY_MIME)!!
 
         val decoder = MediaCodec.createDecoderByType(mime)
         decoder.configure(decoderFormat, inputSurface, null, 0)

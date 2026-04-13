@@ -19,7 +19,8 @@ export interface CompressVideoResult {
 
 export interface VideoProcessorPlugin {
   /**
-   * Compresse une vidéo en H.264 720p / 1.5 Mbps / AAC 128 kbps.
+   * Compresse une vidéo en H.264 : résolution entre 480p et 720p (ratio conservé),
+   * débit ~1,4–2,5 Mbps selon la hauteur ; AAC 128 kbps.
    *
    * @since 1.0.0
    */

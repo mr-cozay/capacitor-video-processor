@@ -11,6 +11,64 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "compressVideo", returnType: CAPPluginReturnPromise),
     ]
 
+    /// Dimensions d’affichage (après `preferredTransform`).
+    private func displaySize(for track: AVAssetTrack) -> CGSize {
+        let size = track.naturalSize
+        let t = track.preferredTransform
+        let rect = CGRect(origin: .zero, size: size).applying(t)
+        return CGSize(width: abs(rect.width), height: abs(rect.height))
+    }
+
+    /// Sortie entre 480p et 720p (côté court), ratio conservé.
+    private func targetEncodeSize(display: CGSize) -> CGSize {
+        let srcW = display.width
+        let srcH = display.height
+        guard srcW > 1, srcH > 1 else {
+            return CGSize(width: 1280, height: 720)
+        }
+        let maxLong: CGFloat = 1280
+        let maxShort: CGFloat = 720
+        let minShort: CGFloat = 480
+        let srcLong = max(srcW, srcH)
+        let srcShort = min(srcW, srcH)
+
+        var scale = min(maxLong / srcLong, maxShort / srcShort)
+        var outLong = srcLong * scale
+        var outShort = srcShort * scale
+
+        if outShort < minShort {
+            let scaleUp = minShort / srcShort
+            if srcLong * scaleUp <= maxLong {
+                scale = scaleUp
+                outLong = srcLong * scale
+                outShort = srcShort * scale
+            }
+        }
+        if outLong > maxLong {
+            let c = maxLong / outLong
+            outLong *= c
+            outShort *= c
+        }
+        if outShort > maxShort {
+            let c = maxShort / outShort
+            outLong *= c
+            outShort *= c
+        }
+
+        let landscape = srcW >= srcH
+        let outW = landscape ? outLong : outShort
+        let outH = landscape ? outShort : outLong
+        let ew = max(2, (Int(outW) / 2) * 2)
+        let eh = max(2, (Int(outH) / 2) * 2)
+        return CGSize(width: ew, height: eh)
+    }
+
+    private func targetBitrate(for size: CGSize) -> Int {
+        let shorter = min(size.width, size.height)
+        let t = max(0, min(1, (shorter - 480) / (720 - 480)))
+        return Int(Double(1_400_000) + t * Double(1_100_000))
+    }
+
     private func fileURL(from pathOrUrl: String) -> URL {
         let trimmed = pathOrUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         if let url = URL(string: trimmed), url.isFileURL || url.scheme == "file" {
@@ -63,15 +121,18 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
         reader.add(readerVideoOutput)
 
         let transform = videoTrack.preferredTransform
+        let display = displaySize(for: videoTrack)
+        let targetSize = targetEncodeSize(display: display)
+        let bitRate = targetBitrate(for: targetSize)
 
         let writerVideoInput = AVAssetWriterInput(
             mediaType: .video,
             outputSettings: [
                 AVVideoCodecKey: AVVideoCodecType.h264,
-                AVVideoWidthKey: 1280,
-                AVVideoHeightKey: 720,
+                AVVideoWidthKey: targetSize.width,
+                AVVideoHeightKey: targetSize.height,
                 AVVideoCompressionPropertiesKey: [
-                    AVVideoAverageBitRateKey: 1_500_000,
+                    AVVideoAverageBitRateKey: bitRate,
                     AVVideoExpectedSourceFrameRateKey: 30,
                     AVVideoMaxKeyFrameIntervalKey: 60,
                     AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
