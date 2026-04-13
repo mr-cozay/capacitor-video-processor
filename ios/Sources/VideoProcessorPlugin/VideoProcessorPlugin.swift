@@ -173,59 +173,42 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
         writer.startSession(atSourceTime: .zero)
 
         let dispatchGroup = DispatchGroup()
+        // Une file pour tout le pipeline ; chaque input n’enregistre `requestMediaDataWhenReady` qu’**une** fois :
+        // AVFoundation rappelle le bloc quand `isReadyForMoreMediaData` redevient true jusqu’à `markAsFinished`.
         let queue = DispatchQueue(label: "com.gme.videoprocessor.mediaQueue")
 
+        var videoTrackFinished = false
         dispatchGroup.enter()
-        var pumpVideo: (() -> Void)?
-        pumpVideo = {
-            writerVideoInput.requestMediaDataWhenReady(on: queue) {
-                var finished = false
-                while writerVideoInput.isReadyForMoreMediaData {
-                    if let sample = readerVideoOutput.copyNextSampleBuffer() {
-                        writerVideoInput.append(sample)
+        writerVideoInput.requestMediaDataWhenReady(on: queue) {
+            guard !videoTrackFinished else { return }
+            while writerVideoInput.isReadyForMoreMediaData {
+                if let sample = readerVideoOutput.copyNextSampleBuffer() {
+                    writerVideoInput.append(sample)
+                } else {
+                    writerVideoInput.markAsFinished()
+                    videoTrackFinished = true
+                    dispatchGroup.leave()
+                    break
+                }
+            }
+        }
+
+        if let writerAudio = writerAudioInput, let readerAudio = readerAudioOutput {
+            var audioTrackFinished = false
+            dispatchGroup.enter()
+            writerAudio.requestMediaDataWhenReady(on: queue) {
+                guard !audioTrackFinished else { return }
+                while writerAudio.isReadyForMoreMediaData {
+                    if let sample = readerAudio.copyNextSampleBuffer() {
+                        writerAudio.append(sample)
                     } else {
-                        writerVideoInput.markAsFinished()
-                        finished = true
+                        writerAudio.markAsFinished()
+                        audioTrackFinished = true
                         dispatchGroup.leave()
                         break
                     }
                 }
-                if !finished {
-                    // Ne pas rappeler `requestMediaDataWhenReady` depuis ce bloc : Apple lève
-                    // NSInternalInconsistencyException si un second enregistrement survient avant
-                    // la fin du handler courant. On diffère sur la même file.
-                    queue.async {
-                        pumpVideo?()
-                    }
-                }
             }
-        }
-        pumpVideo?()
-
-        if let writerAudio = writerAudioInput, let readerAudio = readerAudioOutput {
-            dispatchGroup.enter()
-            var pumpAudio: (() -> Void)?
-            pumpAudio = {
-                writerAudio.requestMediaDataWhenReady(on: queue) {
-                    var finished = false
-                    while writerAudio.isReadyForMoreMediaData {
-                        if let sample = readerAudio.copyNextSampleBuffer() {
-                            writerAudio.append(sample)
-                        } else {
-                            writerAudio.markAsFinished()
-                            finished = true
-                            dispatchGroup.leave()
-                            break
-                        }
-                    }
-                    if !finished {
-                        queue.async {
-                            pumpAudio?()
-                        }
-                    }
-                }
-            }
-            pumpAudio?()
         }
 
         dispatchGroup.notify(queue: queue) {
