@@ -1,6 +1,6 @@
 {
   "name": "capacitor-video-processor",
-  "version": "0.0.1",
+  "version": "0.0.6",
   "description": "Capacitor video processor for Android and iOS app",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
