@@ -191,7 +191,12 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
                     }
                 }
                 if !finished {
-                    pumpVideo?()
+                    // Ne pas rappeler `requestMediaDataWhenReady` depuis ce bloc : Apple lève
+                    // NSInternalInconsistencyException si un second enregistrement survient avant
+                    // la fin du handler courant. On diffère sur la même file.
+                    queue.async {
+                        pumpVideo?()
+                    }
                 }
             }
         }
@@ -214,7 +219,9 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
                         }
                     }
                     if !finished {
-                        pumpAudio?()
+                        queue.async {
+                            pumpAudio?()
+                        }
                     }
                 }
             }
