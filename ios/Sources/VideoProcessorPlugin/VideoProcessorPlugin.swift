@@ -154,14 +154,13 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
             reader.add(readerAudio)
             readerAudioOutput = readerAudio
 
+            // `AVAssetReaderTrackOutput` avec `outputSettings: nil` fournit des buffers **compressés**
+            // (souvent AAC). Avec `outputSettings` non-nil, `AVAssetWriterInput` attend du PCM et lève
+            // « Input buffer must be in an uncompressed format when outputSettings is not nil ».
+            // Passthrough : recopie la piste audio sans ré-encodage (compatible MP4 / AAC typique iPhone).
             let writerAudio = AVAssetWriterInput(
                 mediaType: .audio,
-                outputSettings: [
-                    AVFormatIDKey: kAudioFormatMPEG4AAC,
-                    AVEncoderBitRateKey: 128_000,
-                    AVNumberOfChannelsKey: 2,
-                    AVSampleRateKey: 44_100,
-                ]
+                outputSettings: nil
             )
             writerAudio.expectsMediaDataInRealTime = false
             writer.add(writerAudio)
