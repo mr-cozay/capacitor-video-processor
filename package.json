@@ -14,13 +14,16 @@
     }
   },
   "files": [
-    "android/src/main/",
-    "android/build.gradle",
+    "android/",
+    "ios/",
+    "src/",
     "dist/",
-    "ios/Sources/",
     "*.podspec",
     "Package.swift",
-    "CapacitorVideoProcessor.podspec"
+    "CapacitorVideoProcessor.podspec",
+    "rollup.config.mjs",
+    "tsconfig.json",
+    "README.md"
   ],
   "author": "mr-cozay",
   "license": "MIT",
@@ -42,10 +45,10 @@
     "prettier": "prettier \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "swiftlint": "node-swiftlint",
     "docgen": "docgen --api VideoProcessorPlugin --output-readme README.md --output-json dist/docs.json",
-    "build": "npm run clean && tsc && rollup -c rollup.config.mjs",
-    "build:all": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.mjs",
+    "build": "npm run clean && tsc --project tsconfig.json && rollup -c rollup.config.mjs",
+    "build:all": "npm run clean && npm run docgen && tsc --project tsconfig.json && rollup -c rollup.config.mjs",
     "clean": "rimraf ./dist",
-    "watch": "tsc --watch",
+    "watch": "tsc --project tsconfig.json --watch",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
