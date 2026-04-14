@@ -149,30 +149,31 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
         var writerAudioInput: AVAssetWriterInput?
 
         if let audioTrack = audioTrack {
-            let readerAudio = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
-            readerAudio.alwaysCopiesSampleData = false
-            reader.add(readerAudio)
-            readerAudioOutput = readerAudio
-
-            // `AVAssetReaderTrackOutput` avec `outputSettings: nil` fournit des buffers compressés
-            // (souvent AAC). Pour un passthrough vers MP4, Apple exige un `sourceFormatHint`.
-            // Fallback : si indisponible, on force un transcode AAC en demandant du PCM au reader.
-            let formatHint = audioTrack.formatDescriptions.first as? CMFormatDescription
+            // `formatDescriptions` contient des `CMFormatDescription` (CFType).
+            // Avec MP4 + passthrough, Apple impose un `sourceFormatHint`.
+            let formatHint = audioTrack.formatDescriptions.first
+            let readerAudio: AVAssetReaderTrackOutput
             let writerAudio: AVAssetWriterInput
+
             if let formatHint {
+                readerAudio = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
                 writerAudio = AVAssetWriterInput(
                     mediaType: .audio,
                     outputSettings: nil,
-                    sourceFormatHint: formatHint
+                    sourceFormatHint: formatHint as! CMFormatDescription
                 )
             } else {
-                readerAudio.outputSettings = [
-                    AVFormatIDKey: kAudioFormatLinearPCM,
-                    AVLinearPCMIsFloatKey: false,
-                    AVLinearPCMBitDepthKey: 16,
-                    AVLinearPCMIsBigEndianKey: false,
-                    AVLinearPCMIsNonInterleaved: false,
-                ]
+                // Fallback transcode: reader PCM -> writer AAC.
+                readerAudio = AVAssetReaderTrackOutput(
+                    track: audioTrack,
+                    outputSettings: [
+                        AVFormatIDKey: kAudioFormatLinearPCM,
+                        AVLinearPCMIsFloatKey: false,
+                        AVLinearPCMBitDepthKey: 16,
+                        AVLinearPCMIsBigEndianKey: false,
+                        AVLinearPCMIsNonInterleaved: false,
+                    ]
+                )
                 writerAudio = AVAssetWriterInput(
                     mediaType: .audio,
                     outputSettings: [
@@ -183,6 +184,10 @@ public class VideoProcessorPlugin: CAPPlugin, CAPBridgedPlugin {
                     ]
                 )
             }
+
+            readerAudio.alwaysCopiesSampleData = false
+            reader.add(readerAudio)
+            readerAudioOutput = readerAudio
             writerAudio.expectsMediaDataInRealTime = false
             writer.add(writerAudio)
             writerAudioInput = writerAudio
