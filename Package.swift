@@ -10,7 +10,7 @@ let package = Package(
             targets: ["CapacitorVideoProcessor"])
     ],
     dependencies: [
-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.2.0")
+        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.0")
     ],
     targets: [
         .target(
